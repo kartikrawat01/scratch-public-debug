@@ -1,173 +1,134 @@
 const path = require('path');
-const webpack = require('webpack');
 
-// Plugins
 const CopyWebpackPlugin = require('copy-webpack-plugin');
-const HtmlWebpackPlugin = require('html-webpack-plugin');
 
 const ScratchWebpackConfigBuilder = require('scratch-webpack-configuration');
 
-// const STATIC_PATH = process.env.STATIC_PATH || '/static';
-
-const commonHtmlWebpackPluginOptions = {
-    // Google Tag Manager ID
-    // Looks like 'GTM-XXXXXXX'
-    gtm_id: process.env.GTM_ID || '',
-
-    // Google Tag Manager env & auth info for alterative GTM environments
-    // Looks like '>m_auth=0123456789abcdefghijklm>m_preview=env-00>m_cookies_win=x'
-    // Taken from the middle of: GTM -> Admin -> Environments -> (environment) -> Get Snippet
-    // Blank for production
-    gtm_env_auth: process.env.GTM_ENV_AUTH || ''
+const common = {
+    libraryName: 'scratch-vm',
+    rootPath: path.resolve(__dirname)
 };
 
-const baseConfig = new ScratchWebpackConfigBuilder(
-    {
-        rootPath: path.resolve(__dirname),
-        enableReact: true,
-        shouldSplitChunks: false,
-        publicPath: 'auto'
-    })
+const nodeBuilder = new ScratchWebpackConfigBuilder(common)
+    .setTarget('node')
+    .merge({
+        entry: {
+            'extension-worker': path.join(__dirname, 'src/extension-support/extension-worker.js')
+        },
+        output: {
+            library: {
+                name: 'VirtualMachine'
+            }
+        }
+    });
+
+const webBuilder = new ScratchWebpackConfigBuilder(common)
     .setTarget('browserslist')
     .merge({
-        output: {
-            assetModuleFilename: 'static/assets/[name].[hash][ext][query]',
-            library: {
-                name: 'GUI',
-                type: 'umd2'
-            }
+        entry: {
+            'extension-worker': path.join(__dirname, 'src/extension-support/extension-worker.js')
         },
         resolve: {
             fallback: {
-                Buffer: require.resolve('buffer/'),
-                stream: require.resolve('stream-browserify')
+                Buffer: require.resolve('buffer/')
+            }
+        },
+        output: {
+            library: {
+                name: 'VirtualMachine'
             }
         }
     })
     .addModuleRule({
-        test: /\.(svg|png|wav|mp3|gif|jpg)$/,
-        resourceQuery: /^$/, // reject any query string
-        type: 'asset' // let webpack decide on the best type of asset
-    })
-    .addPlugin(new webpack.DefinePlugin({
-        'process.env.DEBUG': Boolean(process.env.DEBUG),
-        'process.env.GA_ID': `"${process.env.GA_ID || 'UA-000000-01'}"`,
-        'process.env.GTM_ENV_AUTH': `"${process.env.GTM_ENV_AUTH || ''}"`,
-        'process.env.GTM_ID': process.env.GTM_ID ? `"${process.env.GTM_ID}"` : null
-    }))
-    .addPlugin(new CopyWebpackPlugin({
-        patterns: [
-            {
-                from: 'node_modules/scratch-blocks/media',
-                to: 'static/blocks-media/default'
-            },
-            {
-                from: 'node_modules/scratch-blocks/media',
-                to: 'static/blocks-media/high-contrast'
-            },
-            {
-                // overwrite some of the default block media with high-contrast versions
-                // this entry must come after copying scratch-blocks/media into the high-contrast directory
-                from: 'src/lib/themes/high-contrast/blocks-media',
-                to: 'static/blocks-media/high-contrast',
-                force: true
-            },
-            {
-                context: 'node_modules/scratch-vm/dist/web',
-                from: 'extension-worker.{js,js.map}',
-                noErrorOnMissing: true
-            }
-        ]
-    }));
+        test: require.resolve('./src/index.js'),
+        loader: 'expose-loader',
+        options: {
+            exposes: 'VirtualMachine'
+        }
+    });
 
-if (!process.env.CI) {
-    baseConfig.addPlugin(new webpack.ProgressPlugin());
-}
-
-// build the shipping library in `dist/`
-const distConfig = baseConfig.clone()
+const playgroundBuilder = webBuilder.clone()
     .merge({
+        devServer: {
+            contentBase: false,
+            host: '0.0.0.0',
+            port: process.env.PORT || 8073
+        },
+        performance: {
+            hints: false
+        },
         entry: {
-            'scratch-gui': path.join(__dirname, 'src/index.js')
+            'benchmark': './src/playground/benchmark',
+            'video-sensing-extension-debug': './src/extensions/scratch3_video_sensing/debug',
+            'extension-worker': path.join(__dirname, 'src/extension-support/extension-worker.js')
         },
         output: {
-            path: path.resolve(__dirname, 'dist')
-        }
-    })
-    .addExternals(['react', 'react-dom'])
-    .addPlugin(
-        new CopyWebpackPlugin({
-            patterns: [
-                {
-                    from: 'src/lib/libraries/*.json',
-                    to: 'libraries',
-                    flatten: true
-                }
-            ]
-        })
-    );
-
-// build the examples and debugging tools in `build/`
-const buildConfig = baseConfig.clone()
-    .enableDevServer(process.env.PORT || 8601)
-    .merge({
-        entry: {
-            gui: './src/playground/index.jsx',
-            blocksonly: './src/playground/blocks-only.jsx',
-            compatibilitytesting: './src/playground/compatibility-testing.jsx',
-            player: './src/playground/player.jsx',
-                },
-        output: {
-            path: path.resolve(__dirname, 'build')
-        }
-    })
-    .addPlugin(new HtmlWebpackPlugin({
-        ...commonHtmlWebpackPluginOptions,
-        chunks: ['gui'],
-        template: 'src/playground/index.ejs',
-        title: 'Scratch 3.0 GUI'
-    }))
-    .addPlugin(new HtmlWebpackPlugin({
-        ...commonHtmlWebpackPluginOptions,
-        chunks: ['blocksonly'],
-        filename: 'blocks-only.html',
-        template: 'src/playground/index.ejs',
-        title: 'Scratch 3.0 GUI: Blocks Only Example'
-    }))
-    .addPlugin(new HtmlWebpackPlugin({
-        ...commonHtmlWebpackPluginOptions,
-        chunks: ['compatibilitytesting'],
-        filename: 'compatibility-testing.html',
-        template: 'src/playground/index.ejs',
-        title: 'Scratch 3.0 GUI: Compatibility Testing'
-    }))
-    .addPlugin(new HtmlWebpackPlugin({
-        ...commonHtmlWebpackPluginOptions,
-        chunks: ['player'],
-        filename: 'player.html',
-        template: 'src/playground/index.ejs',
-        title: 'Scratch 3.0 GUI: Player Example'
-    }))
-    .addPlugin(new CopyWebpackPlugin({
-        patterns: [
-            {
-                from: 'static',
-                to: 'static'
-            },
-            {
-                from: 'extensions/**',
-                to: 'static',
-                context: 'src/examples'
+            path: path.resolve(__dirname, 'playground'),
+            library: {
+                name: 'VirtualMachine'
             }
-        ]
-    }));
+        }
+    })
+    .addModuleRule({
+        test: require.resolve('stats.js/build/stats.min.js'),
+        loader: 'script-loader'
+    })
+    .addModuleRule({
+        test: require.resolve('./src/extensions/scratch3_video_sensing/debug.js'),
+        loader: 'expose-loader',
+        options: {
+            exposes: 'Scratch3VideoSensingDebug'
+        }
+    })
+    .addModuleRule({
+        test: require.resolve('scratch-blocks/dist/vertical.js'),
+        loader: 'expose-loader',
+        options: {
+            exposes: 'Blockly'
+        }
+    })
+    .addModuleRule({
+        test: require.resolve('scratch-audio/src/index.js'),
+        loader: 'expose-loader',
+        options: {
+            exposes: 'AudioEngine'
+        }
+    })
+    .addModuleRule({
+        test: require.resolve('scratch-storage/src/index.ts'),
+        loader: 'expose-loader',
+        options: {
+            exposes: 'ScratchStorage'
+        }
+    })
+    .addModuleRule({
+        test: require.resolve('scratch-render'),
+        loader: 'expose-loader',
+        options: {
+            exposes: 'ScratchRender'
+        }
+    })
+    .addPlugin(new CopyWebpackPlugin([
+        {
+            from: 'node_modules/scratch-blocks/media',
+            to: 'media'
+        },
+        {
+            from: 'node_modules/scratch-storage/dist/web'
+        },
+        {
+            from: 'node_modules/scratch-render/dist/web'
+        },
+        {
+            from: 'node_modules/scratch-svg-renderer/dist/web'
+        },
+        {
+            from: 'src/playground'
+        }
+    ]));
 
-// Skip building `dist/` unless explicitly requested
-// It roughly doubles build time and isn't needed for `scratch-gui` development
-// If you need non-production `dist/` for local dev, such as for `scratch-www` work, you can run something like:
-// `BUILD_MODE=dist npm run build`
-const buildDist = process.env.NODE_ENV === 'production' || process.env.BUILD_MODE === 'dist';
-
-module.exports = buildDist ?
-    [buildConfig.get(), distConfig.get()] :
-    buildConfig.get();
+module.exports = [
+    playgroundBuilder.get(), // webpack-dev-server only looks at the first configuration
+    nodeBuilder.get(),
+    webBuilder.get()
+];

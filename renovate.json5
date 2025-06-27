@@ -3,9 +3,5 @@
 
   "extends": [
     "github>scratchfoundation/scratch-renovate-config:js-lib-bundled"
-  ],
-
-  "ignoreDeps": [
-    "cat-blocks"
   ]
 }

@@ -9,20 +9,14 @@ npm-*
 /.nyc_output
 /coverage
 
+# Editor
+/.idea
+/.vscode
+
 # Build
-/build
 /dist
-/.opt-in
+/playground
+/benchmark
 
-# Generated translation files
+# Localization
 /translations
-/locale
-
-# Other generated source
-/src/generated
-
-# Downloaded during "npm install"
-/static/microbit
-
-# for act
-.secrets

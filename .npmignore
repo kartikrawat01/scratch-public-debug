@@ -1,21 +1,19 @@
-# Mac OS
-.DS_Store
-
-# NPM
-/node_modules
-npm-*
-
-# Double copies of all the static assets and tutorial gifs
-/src
-
-# Testing
-/.nyc_output
-/coverage
+# Development files
+.eslintrc.js
+/.editorconfig
+/.eslintignore
+/.gitattributes
+/.github
+/.travis.yml
+/.tx
 /test
 
-# Build
-/.opt-in
-/build
+# Build created files
+/playground
 
-# generated translation files
-/translations
+# Coverage created files
+/.nyc_output
+/coverage
+
+# Exclude already built packages from testing with npm pack
+/scratch-vm-*.{tar,tgz}
